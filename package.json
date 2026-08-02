@@ -6,6 +6,9 @@
     "local:db": "docker compose up -d --wait db",
     "local:db:stop": "docker compose stop db",
     "local:db:destroy": "docker compose down -v",
-    "db:psql": "docker compose exec db psql -U showspark -d showspark"  
+    "db:psql": "docker compose exec db psql -U showspark -d showspark"
+  },
+  "devDependencies": {
+    "dbmate": "^2.34.1"
   }
 }
