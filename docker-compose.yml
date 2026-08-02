@@ -1,7 +1,7 @@
 services:
   db:
     image: postgres:18
-    container_name: shpwspark-db
+    container_name: shpwspark
     environment:
       POSTGRES_USER: showspark
       POSTGRES_PASSWORD: showspark
