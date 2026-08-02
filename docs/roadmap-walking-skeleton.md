@@ -1,0 +1,230 @@
+# ロードマップ: 土台構築（ログイン〜ユーザー情報表示）
+
+**ゴール**: Google でログインし、自分のユーザー情報が画面に表示される。ただしその情報は
+`Vercel(Next.js) → API Gateway(JWT Authorizer) → Lambda(FastAPI) → Supabase(Postgres)`
+を実際に通って返ってくること。
+
+いわゆる walking skeleton。機能は最小だが、**インフラの経路はすべて本番と同じものを通す**。
+ボード画面やアニメ管理はこの段階では作らない。
+
+---
+
+## 認証の設計
+
+### 新規登録のブロック
+
+Auth0 の「Disable Sign Ups」トグルは Database 接続と Passwordless 接続にしか存在せず、
+**ソーシャル接続（Google）には無い**。Google 接続では任意の Google アカウントが認証を通ると
+Auth0 がユーザーを自動作成する。
+
+そのため **Post-Login Action** で拒否する。メール OTP は不要。
+
+```js
+exports.onExecutePostLogin = async (event, api) => {
+  // 許可済みユーザーは常に通す
+  if (event.user.app_metadata?.provisioned) return;
+
+  // 未許可ユーザーはフラグ次第
+  if (event.secrets.SIGNUP_ENABLED !== 'true') {
+    return api.access.deny('registration_closed');
+  }
+
+  // 任意: 開放中でもメールアドレスを限定する
+  const allow = (event.secrets.ALLOWED_EMAILS || '')
+    .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  if (allow.length && !allow.includes(event.user.email?.toLowerCase())) {
+    return api.access.deny('registration_closed');
+  }
+
+  api.user.setAppMetadata('provisioned', true);
+};
+```
+
+**Action Secrets（＝フラグの実体）**
+
+| Secret | 既定値 | 意味 |
+|---|---|---|
+| `SIGNUP_ENABLED` | `false` | 未許可ユーザーの初回ログインを通すか |
+| `ALLOWED_EMAILS` | 空 | 開放中に限定するメールアドレス（カンマ区切り、任意） |
+
+**運用**: 人を追加するときだけ `SIGNUP_ENABLED=true` にし、本人にログインしてもらい、`false` に戻す。
+一度 `app_metadata.provisioned` が付けば以降は `false` でもログインできる。
+管理画面・管理API・CLIコマンドは作らない。
+
+**判定に `logins_count` を使わない理由**: カウンタの増加タイミングに依存せず、
+「許可済みかどうか」を明示的なフラグとして持てるため。
+
+**既知の副作用**: 拒否されたユーザーの Auth0 レコードは残る（Action は認証成立後に走るため）。
+トークンは発行されないので実害はない。削除には Management API 呼び出しが必要になるため、この規模では放置する。
+
+**開放中の窓**: `SIGNUP_ENABLED=true` の間はログインURLを知る誰でも登録できる。
+窓を短くするか、`ALLOWED_EMAILS` を併用する。両方を推奨。
+
+### フラグの単一情報源
+
+登録可否の判断は **Auth0 の Action だけ**が行う。API 側に同種のフラグを置かない。
+2箇所に持つと必ず食い違い、「Auth0 は通すが API が弾く」という切り分け困難な状態になる。
+API は「トークンが有効＝正当な利用者」として扱う。
+
+### テナント分離
+
+Auth0 テナントを dev と prod で分ける。`SIGNUP_ENABLED` はテナントごとに独立するので、
+prod を常時 `false`、dev を `true` にしておける。
+
+### Google OAuth クライアント
+
+Auth0 のデフォルト開発キーは共有・レート制限付きで本番利用不可。
+Google Cloud Console で自前の OAuth 2.0 クライアントを作り、Auth0 の Google 接続に設定する。
+
+---
+
+## データモデルの追加
+
+仕様.md のデータモデルに **`app_user` を追加する**。
+
+```sql
+create table app_user (
+  sub           text primary key,          -- Auth0 の sub クレーム
+  email         text not null,
+  name          text,
+  picture_url   text,
+  created_at    timestamptz not null default now(),
+  last_login_at timestamptz not null default now()
+);
+```
+
+**追加する理由**:
+
+1. walking skeleton が DB 書き込みまで通ることを確認するため。`/me` がクレームを反射するだけでは Supabase 経路が検証されない。
+2. 後で `season_member` に編集者を追加するとき、メールアドレスから `sub` を引く必要がある。Auth0 に都度問い合わせずに済ませたい。
+
+`season.owner_id` などが持つのは引き続き `sub` の生値。`app_user.sub` への外部キーは張らない
+（表示用の情報を持つだけのテーブルであり、認可の判断には使わないため）。
+
+---
+
+## フェーズ
+
+各フェーズは**受け入れ条件を満たしてから次へ進む**。
+Phase 0〜4 でローカル一気通貫を完成させ、その後に AWS へ載せる。
+先にデプロイすると、アプリのバグと IAM の設定ミスを同時に切り分けることになり効率が悪い。
+
+### Phase 0 — リポジトリ骨格
+
+- ルート `package.json`（スクリプトのみ。`concurrently` で3プロセスを束ねる）
+- `docker-compose.yml`（`postgres:17` 1コンテナ）
+- `.gitignore`, `apps/web/.env.example`, `apps/api/.env.example`
+- `apps/web` / `apps/api` の空スケルトン
+
+**受け入れ**: `npm run local:db` で Postgres が起動し、`npm run db:psql` で接続できる。
+
+### Phase 1 — DB
+
+- `db/migrations/0001_app_user.sql`
+- `db/seed.sql`（このフェーズでは空でよい）
+- `npm run db:migrate` / `db:reset` / `db:psql` の実装
+
+**受け入れ**: `npm run db:reset` を2回連続で実行しても失敗せず、`app_user` テーブルが存在する。
+
+### Phase 2 — API（ローカルのみ）
+
+- `core/config.py` — 環境変数を起動時に検証して落とす
+- `db.py` — 接続管理。`statement_cache_size=0` はローカルでも適用
+- `auth.py` — Lambda / ローカルの差を吸収（AGENT.md 参照）
+- `routers/health.py` — `GET /health`（認証なし）
+- `routers/me.py` — `GET /me`（認証あり）。`app_user` を upsert し、`last_login_at` を更新して返す
+- `main.py` — FastAPI + Mangum handler
+- テスト: `auth.py` の分岐（`APP_ENV` が local 以外でローカル経路を使うと起動時に落ちること）、`/me` の upsert が2回目で重複しないこと
+
+**受け入れ**:
+- `curl localhost:8000/health` → 200
+- `curl localhost:8000/me` → 401
+- 手作りトークン付き `/me` → 200 かつ `app_user` に行ができる。2回叩いても行は1つ
+
+### Phase 3 — Auth0 設定
+
+- テナント dev / prod を作成
+- Google Cloud Console で OAuth クライアント作成 → Auth0 の Google 接続に設定
+- Database 接続と他のソーシャル接続はすべて無効化（Google のみ残す）
+- API（Audience）を登録
+- Application（Regular Web Application）を作成
+- Post-Login Action を作成・デプロイし、Secrets を設定
+
+**受け入れ**:
+- `SIGNUP_ENABLED=false` の状態で、未登録の Google アカウントがログインを拒否される
+- `true` に変えると通り、`app_metadata.provisioned` が付く
+- `false` に戻しても、そのアカウントは引き続きログインできる
+
+### Phase 4 — フロント（ローカル一気通貫）
+
+- Next.js + `@auth0/nextjs-auth0`
+- ログイン / ログアウト導線
+- ミドルウェアで保護されたページを1枚だけ作り、`/me` の結果（名前・メール・アイコン）を表示
+- `lib/api-client.ts` — アクセストークンを Authorization ヘッダに載せる薄いラッパ
+
+**受け入れ**: `npm run local` の3プロセスで、ログイン → Google → 自分の情報が画面に出る。
+表示される情報が **`/me` 経由（＝DB を通ったもの）**であること。ID トークンから直接読んでいないこと。
+
+> 注: `@auth0/nextjs-auth0` は v3 と v4 でコールバックのパスが変わる（`/api/auth/callback` → `/auth/callback`）。
+> このフェーズでバージョンを確定させ、Auth0 の Allowed Callback URLs と README の記載を実際のパスに合わせる。
+
+### Phase 5 — AWS デプロイ（認証なしで疎通）
+
+- Supabase staging プロジェクト作成。Supavisor Transaction mode（6543）の接続文字列を取得
+- 接続文字列を SSM Parameter Store（SecureString）へ
+- `apps/api/template.yaml` — Lambda + HTTP API。**まず `/health` だけ公開**
+- GitHub OIDC 用 IAM ロール
+- `.github/workflows/api-deploy.yml`
+
+**受け入れ**: `develop` に push → 自動デプロイ → 実URLの `/health` が 200。
+このとき DB 接続も確認する（`/health` に軽い `select 1` を含めておく）。
+
+### Phase 6 — JWT Authorizer
+
+- HTTP API に JWT Authorizer を追加（Issuer = Auth0 テナント、Audience = 登録した API）
+- `/me` を保護対象に、`/health` は公開のまま
+
+**受け入れ**: 実URLの `/me` がトークン無しで 401、Auth0 発行のトークン付きで 200。
+Lambda 側に JWT 検証コードが1行も無いこと。
+
+### Phase 7 — Vercel
+
+- プロジェクト作成。Root Directory = `apps/web`、Production Branch = `main`
+- `develop` に固定のブランチドメインを割り当てる
+
+> プレビューデプロイのURLは毎回変わるため、Auth0 の Allowed Callback URLs に登録できない。
+> `develop` には固定ドメインを割り当てること。これを忘れると staging でログインできない。
+
+- 環境変数（Auth0 の設定値、API のベースURL）を Vercel に登録
+
+**受け入れ**: staging URL でログインし、ユーザー情報が表示される。
+
+### Phase 8 — CI 仕上げ
+
+- `web-ci.yml` / `api-ci.yml`（`paths:` フィルタ付き）
+- `npm run gen:types` の差分チェックを CI に組み込む
+- `db-migrate.yml`（手動 dispatch）
+- prod テナント / prod スタック / prod Supabase を用意し、`main` へマージして疎通確認
+
+**受け入れ**: PR を出すと該当する CI だけが走る。`main` にマージすると本番に反映される。
+
+---
+
+## このロードマップで確認できること
+
+Phase 8 完了時点で、以下がすべて実証済みになる。
+
+- Auth0 の Google ログインと、フラグによる新規登録の制御
+- API Gateway の JWT Authorizer が検証を担い、Python 側に検証コードが無いこと
+- Lambda から Supavisor 経由で Supabase に接続でき、prepared statement 問題を踏んでいないこと
+- monorepo から Vercel と AWS へそれぞれ独立してデプロイできること
+- ブランチとマージによる自動デプロイ、およびマイグレーションだけが手動であること
+
+ここから先（シーズン、アニメ、かんばん、PNG出力、同時編集）は、この土台の上に載せる。
+
+---
+
+## 未決事項
+
+- ポーリング方式と競合解決の設計（仕様.md「検討してほしいこと」）。土台構築とは独立に決められるため、Phase 4 と並行して検討してよい。
+- `app_user` の情報をどこまで信頼するか。Google 側で名前やアイコンを変更した場合、`/me` のたびに上書きするか初回のみとするか。Phase 2 で決める（初回のみ＋ログイン日時だけ更新、を既定とする）。
