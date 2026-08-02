@@ -1,0 +1,11 @@
+{
+  "name": "show-spark-v3",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "local:db": "docker compose up -d --wait db",
+    "local:db:stop": "docker compose stop db",
+    "local:db:destroy": "docker compose down -v",
+    "db:psql": "docker compose exec db psql -U showspark -d showspark"  
+  }
+}

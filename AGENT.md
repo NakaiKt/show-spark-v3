@@ -1,6 +1,6 @@
 # AGENT.md
 
-このリポジトリの構成と開発ルール。要件は [仕様.md](./仕様.md)、コマンドは [README.md](./README.md) を参照。ここには両者に書かないこと（構成の意図とルール）だけを書く。
+このリポジトリの構成と開発ルール。要件は [仕様書](./docs/v0.1/仕様書.md)、コマンドは [README.md](./README.md) を参照。ここには両者に書かないこと（構成の意図とルール）だけを書く。
 
 ---
 
@@ -98,13 +98,15 @@ Auth0 のローカルエミュレータは存在しないため、ローカル�
 
 ### DB 接続
 
-本番は Supavisor の Transaction mode（6543）経由。prepared statement を無効化する必要がある。ローカルは Postgres 直結なので prepared statement が有効でも動いてしまい、**ローカルで通って本番で落ちる**。これを避けるため、無効化設定（`statement_cache_size=0` 相当）はローカルでも同じく適用する。**環境で分岐させない。**
+本番は Neon の Pooler（ホスト名に `-pooler` が付くエンドポイント）経由。中身は PgBouncer の transaction mode なので prepared statement を無効化する必要がある。ローカルは Postgres 直結なので prepared statement が有効でも動いてしまい、**ローカルで通って本番で落ちる**。これを避けるため、無効化設定（`statement_cache_size=0` 相当）はローカルでも同じく適用する。**環境で分岐させない。**
 
-Session mode（5432）は Lambda から使わない。接続枯渇を起こす。
+Neon の直結エンドポイントは Lambda から使わない。接続枯渇を起こす。ただしマイグレーション（DDL）は Pooler ではなく直結から流す。
+
+Neon は `sslmode=require` が必須。ローカルの Postgres は非SSLなので、ここは環境差として残る（接続文字列で吸収する）。
 
 ### ローカルスタックの方針
 
-- **Supabase CLI のローカルスタックは使わない。** 利用するのは Postgres だけで、Auth/Realtime/Storage/Studio まで含む十数コンテナを起動する理由がない。素の `postgres:17` 1コンテナで足りる。
+- **ローカルDBは `postgres:18` コンテナ1つで動かす。** バージョンは Neon 側に合わせる。ずれると、ローカルで通ったSQLが本番で落ちる。
 - **SAM local は使わない。** 呼び出しごとに Docker コンテナが起動して反復が遅い。SAM はデプロイ専用。API Gateway 固有の挙動は staging で確認する。
 - **開発はすべてローカルで完結させる。** フロントだけ起動して DB/API を staging に向ける運用はしない。環境が混ざると何を見ているか判別できなくなり、staging のスキーマを壊すと他の作業も止まる。
 
@@ -129,20 +131,22 @@ Session mode（5432）は Lambda から使わない。接続枯渇を起こす�
 
 | ブランチ | 環境 | フロント | API | DB |
 |---|---|---|---|---|
-| `develop` | staging | Vercel ブランチドメイン | AWS staging スタック | Supabase staging プロジェクト |
-| `main` | production | Vercel 本番ドメイン | AWS prod スタック | Supabase prod プロジェクト |
+| `develop` | staging | Vercel ブランチドメイン | AWS staging スタック | Neon staging プロジェクト |
+| `main` | production | Vercel 本番ドメイン | AWS prod スタック | Neon prod プロジェクト |
 
 - Vercel は Production Branch を `main` に設定し、Root Directory を `apps/web` にする。
 - API は GitHub Actions が `apps/api/**` の変更を検知して `sam build && sam deploy`。AWS 認証情報はリポジトリに置かず、**GitHub OIDC で AssumeRole** する。
 - ワークフローは `paths:` フィルタで分ける（`web-ci` / `api-ci` / `api-deploy` / `db-migrate`）。monorepo でも無関係な CI を回さないため。
 
-Supabase の Free プランはアクティブなプロジェクト数に上限があり、staging と prod で枠を使い切る可能性がある。また一定期間アクセスがないとプロジェクトが一時停止するため、シーズンの合間は staging が止まっていることがある。
+staging と prod は Neon の別プロジェクトとして作成し、接続文字列を共有しない。
+
+Neon はアイドル時に自動サスペンドし、アクセスが来ると1秒未満で自動復帰する。シーズンの合間に触らない期間が続いても、手動の復帰操作は要らない。
 
 ---
 
 ## 実装上の事故りやすい点
 
-詳細は [仕様.md](./仕様.md) にある。ここでは実装時に踏みやすい箇所だけ挙げる。
+詳細は [仕様書](./docs/v0.1/仕様書.md) にある。ここでは実装時に踏みやすい箇所だけ挙げる。
 
 - `stream_weekday`（配信曜日）と `air_weekday`（放送曜日）を、変数名・カラム名・UIラベルのすべてで区別する。日本語で「曜日」とだけ書かない。
 - 週跨ぎのソート比較を絶対曜日で行わない。仕様の式どおりに比較する。ここは必ずユニットテストで固定してから実装する。

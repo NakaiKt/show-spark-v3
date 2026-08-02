@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:18
+    container_name: shpwspark-db
+    environment:
+      POSTGRES_USER: showspark
+      POSTGRES_PASSWORD: showspark
+      POSTGRES_DB: showspark
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U showspark -d showspark"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  pgdata:

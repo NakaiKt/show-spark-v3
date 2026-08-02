@@ -2,7 +2,7 @@
 
 アニメシーズン視聴管理ツール。
 
-- 要件 → [仕様.md](./仕様.md)
+- 要件 → [仕様書](./docs/v0.1/仕様書.md)
 - 構成・開発ルール → [AGENT.md](./AGENT.md)
 
 > **現在のステータス: 設計中（コード未実装）**
@@ -37,7 +37,7 @@ npm run local
 |---|---|---|
 | Web | http://localhost:3000 | `next dev` |
 | API | http://localhost:8000 （docs: `/docs`） | `uvicorn --reload` |
-| DB | localhost:5432 | Docker の `postgres:17` |
+| DB | localhost:5432 | Docker の `postgres:18` |
 
 個別に起動する場合:
 
@@ -98,4 +98,4 @@ npm run typecheck
 
 **DBマイグレーションだけは自動で走らない。** GitHub Actions の `db-migrate` ワークフローを手動 dispatch し、対象環境を選んで実行する。
 
-staging はローカルで再現できないもの（API Gateway の JWT Authorizer、Lambda のコールドスタート、Supavisor 経由の接続）を確認する場所で、日常の開発では使わない。
+staging はローカルで再現できないもの（API Gateway の JWT Authorizer、Lambda のコールドスタート、Neon Pooler 経由の接続）を確認する場所で、日常の開発では使わない。
