@@ -6,7 +6,12 @@
     "local:db": "docker compose up -d --wait db",
     "local:db:stop": "docker compose stop db",
     "local:db:destroy": "docker compose down -v",
-    "db:psql": "docker compose exec db psql -U showspark -d showspark"
+    "db:psql": "docker compose exec db psql -U showspark -d showspark",
+    "db:migrate": "dbmate up",
+    "db:rollback": "dbmate rollback",
+    "db:status": "dbmate status",
+    "db:seed": "docker compose exec -T db psql -U showspark -d showspark -v ON_ERROR_STOP=1 < db/seed.sql",
+    "db:reset": "dbmate drop && dbmate up && npm run db:seed"
   },
   "devDependencies": {
     "dbmate": "^2.34.1"
