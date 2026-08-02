@@ -4,98 +4,141 @@
 
 - 要件 → [仕様書](./docs/v0.1/仕様書.md)
 - 構成・開発ルール → [AGENT.md](./AGENT.md)
+- 構築の進め方 → [土台の構築](./docs/v0.1/土台の構築.md)
 
-> **現在のステータス: 設計中（コード未実装）**
-> 以下のコマンドはこれから実装する。
+> **現在のステータス: DB のみ構築済み**
+> ローカルの Postgres とマイグレーションが動作する。API とフロントは未実装。
 
 ---
 
 ## 前提
 
-- Node.js 22+
-- Python 3.12+
-- Docker
-- Auth0 の dev テナント（Allowed Callback URLs に `http://localhost:3000/api/auth/callback` を追加しておく）
+| ツール | バージョン | 用途 |
+|---|---|---|
+| Docker | — | ローカル Postgres の実行 |
+| Node.js | 22+ | マイグレーションツール（dbmate）の実行 |
+
+WSL2 で Docker Desktop を使う場合は、Docker Desktop の Settings → Resources → WSL Integration で対象ディストロを有効にする。有効になっていないと `docker` コマンドが見つからない。
 
 ## セットアップ
 
 ```bash
 npm install
-npm run setup                          # apps/web の install と apps/api の venv 作成
-cp apps/web/.env.example apps/web/.env.local
-cp apps/api/.env.example  apps/api/.env  # Auth0 の Domain / Audience / Client ID を記入
-npm run db:reset                       # ローカルDBを作成してシード投入
-```
-
-## 起動
-
-```bash
-npm run local
-```
-
-| | URL | プロセス |
-|---|---|---|
-| Web | http://localhost:3000 | `next dev` |
-| API | http://localhost:8000 （docs: `/docs`） | `uvicorn --reload` |
-| DB | localhost:5432 | Docker の `postgres:18` |
-
-個別に起動する場合:
-
-```bash
+cp .env.example .env
 npm run local:db
-npm run local:api
-npm run local:web
+npm run db:migrate
 ```
 
-開発はすべてローカルで完結させる。フロントだけ起動して DB や API を staging に向ける運用はしない。
+`.env` は編集不要。ローカル用の値がそのまま入っている。
 
-## DB
+## 環境変数
+
+`.env`（リポジトリ直下）に置く。dbmate が自動で読み込む。
+
+| 変数 | 値 | 説明 |
+|---|---|---|
+| `DATABASE_URL` | `postgres://showspark:showspark@127.0.0.1:5432/showspark?sslmode=disable` | 接続先。`sslmode=disable` はローカルの Postgres が SSL 無しで動くため必要 |
+| `DBMATE_NO_DUMP_SCHEMA` | `true` | スキーマダンプを無効化する。有効にするにはホストに `pg_dump` 18 系が必要 |
+
+## コマンド
+
+### コンテナの操作
+
+| コマンド | 内容 |
+|---|---|
+| `npm run local:db` | Postgres コンテナを起動し、接続できるようになるまで待つ |
+| `npm run local:db:stop` | コンテナを停止する。データは残る |
+| `npm run local:db:destroy` | コンテナとボリュームを削除する。**データが消える** |
+
+`local:db` はヘルスチェックが通るまでブロックする。プロンプトが戻った時点で接続可能。初回は Postgres イメージの取得で1〜2分かかる。
+
+作業を終えるときは `local:db:stop` を使う。`local:db:destroy` はボリュームごと消すため、コンテナの設定を変えて初期化からやり直したいときに使う。
+
+### マイグレーション
+
+| コマンド | 内容 |
+|---|---|
+| `npm run db:migrate` | 未適用のマイグレーションをファイル名順に適用する |
+| `npm run db:status` | 各マイグレーションの適用状況を一覧表示する |
+| `npm run db:rollback` | 直前に適用したマイグレーションを1つ戻す |
+| `npm run db:seed` | `db/seed.sql` を流し込む |
+| `npm run db:reset` | DB を削除して作り直し、全マイグレーションとシードを適用する |
+
+`db:migrate` は適用済みのものを飛ばすため、何度実行しても安全。適用済みかどうかは DB 内の `schema_migrations` テーブルで管理される。
+
+`db:status` の出力は `[X]` が適用済み、`[ ]` が未適用。
+
+`db:reset` はスキーマを壊したときの復旧手段。ローカルのデータは全て消える。
+
+### 接続
+
+| コマンド | 内容 |
+|---|---|
+| `npm run db:psql` | 対話的な SQL シェル（psql）を開く |
+
+テーブルの中身を目で確認したいときに使う。psql はコンテナ内のものを使うため、ホストへのインストールは不要。
+
+よく使う psql の入力:
+
+| 入力 | 内容 |
+|---|---|
+| `\dt` | テーブル一覧 |
+| `\d テーブル名` | テーブルの列・制約・トリガーの定義 |
+| `\l` | データベース一覧 |
+| `\q` | 終了 |
+
+## マイグレーションを追加する
 
 ```bash
-npm run db:migrate    # db/migrations/*.sql を適用
-npm run db:reset      # DROP → migrate → seed。壊したらこれで戻す
-npm run db:psql       # psql で接続
+npx dbmate new add_season
 ```
 
-## 型生成
+`db/migrations/<タイムスタンプ>_add_season.sql` が生成される。中身を書く。
+
+```sql
+-- migrate:up
+create table season (
+  ...
+);
+
+-- migrate:down
+drop table season;
+```
+
+`-- migrate:up` と `-- migrate:down` の行は必須。dbmate がこのコメントで適用用と巻き戻し用を区別するため、欠けるとエラーになる。
+
+書けたら適用する。
 
 ```bash
-npm run gen:types     # API 起動中に実行。packages/api-types を再生成する
+npm run db:migrate
 ```
 
-生成物はコミットする。CI で差分が出ると fail する。
-
-## テスト
-
-```bash
-npm test              # web + api のユニット/結合
-npm run test:web
-npm run test:api
-npm run test:e2e      # Playwright（web を起動した状態で実行）
-npm run lint
-npm run typecheck
-```
+一度でも staging や prod に適用したマイグレーションは編集しない。変更が必要なら新しいマイグレーションを追加する。
 
 ## 動作確認
 
-ローカルで一通り触って確認する項目。
+```bash
+npm run db:status     # Applied: 1 / Pending: 0
+npm run db:psql
+```
 
-1. **同時編集** — ブラウザを2枚（別プロファイル・別ユーザー）で同じシーズンのボードを開く。片方でカードを別の曜日にドラッグし、もう片方に数秒以内で反映されること。
-2. **入力の保護** — 上記の状態で、片方の詳細モーダルのメモ欄にフォーカスして入力し続ける。もう片方から同じ作品を編集しても、入力中の文字が消えないこと。
-3. **ソート順** — シードに週跨ぎのデータ（配信=日曜 / 放送=土曜25:00）が入っている。並び順が逆転しないこと。
-4. **PNG出力** — 出力してダウンロードし、確定作品だけが載ること、日本語が豆腐にならないこと、プレビューと一致すること。
-5. **画像のリンク切れ** — シードに到達不能なURLが1件入っている。フォールバック表示が出ること。
-6. **画面幅** — 1920px で8列が収まること。狭めたときに崩れないこと。
+```sql
+\dt
+\d app_user
+\q
+```
 
-## デプロイ
+`app_user` と `schema_migrations` が存在すれば正常。
 
-| ブランチ | 環境 | 動作 |
-|---|---|---|
-| `develop` | staging | push で自動デプロイ |
-| `main` | production | push で自動デプロイ |
+## つまずいたら
 
-フロントは Vercel、API は GitHub Actions から SAM でデプロイされる。
-
-**DBマイグレーションだけは自動で走らない。** GitHub Actions の `db-migrate` ワークフローを手動 dispatch し、対象環境を選んで実行する。
-
-staging はローカルで再現できないもの（API Gateway の JWT Authorizer、Lambda のコールドスタート、Neon Pooler 経由の接続）を確認する場所で、日常の開発では使わない。
+| 症状 | 対処 |
+|---|---|
+| `docker: command not found` | Docker Desktop の WSL Integration が無効。有効化後に WSL を再起動する |
+| `connection refused` | コンテナが停止している。`npm run local:db` |
+| `SSL is not enabled on the server` | `.env` の `DATABASE_URL` に `?sslmode=disable` が付いていない |
+| `password authentication failed` | `.env` と `docker-compose.yml` のユーザー名・パスワードが不一致 |
+| `port is already allocated` | 5432 が使用中。`docker-compose.yml` の `ports` を `127.0.0.1:55432:5432` に変え、`.env` のポートも合わせる |
+| `file must contain '-- migrate:up' comment` | マイグレーションにマーカー行が無い |
+| `pg_dump: command not found` | `.env` に `DBMATE_NO_DUMP_SCHEMA=true` が無い |
+| コンテナが `unhealthy` | `docker compose logs db` でエラーを確認。ボリュームが壊れていれば `npm run local:db:destroy` して再作成 |

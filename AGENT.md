@@ -6,12 +6,13 @@
 
 ## リポジトリ構成
 
-単一リポジトリに web と api を同居させる。npm workspaces / Turborepo は使わない（TS と Python で言語が異なり、共通ビルドグラフの利点がないため）。ルートの `package.json` はタスクランナー専用で、アプリの依存を持たない。
+単一リポジトリに web と api を同居させる。npm workspaces / Turborepo は導入しない（TS と Python で言語が異なり、共通ビルドグラフの利点がないため）。ルートの `package.json` はタスクランナーで、アプリの依存は持たない。開発ツール（dbmate）だけを `devDependencies` に置く。
 
 ```
 show-spark-v3/
-├── package.json                 # スクリプトのみ
+├── package.json                 # スクリプトと開発ツールのみ
 ├── docker-compose.yml           # ローカル用 Postgres 1コンテナ
+├── .env.example                 # DATABASE_URL などの雛形
 │
 ├── apps/
 │   ├── web/                     # Next.js。Vercel の Root Directory に指定する
@@ -47,9 +48,9 @@ show-spark-v3/
 │
 ├── packages/api-types/          # OpenAPI から生成した TS 型（生成物をコミット）
 ├── db/
-│   ├── migrations/              # 連番の素のSQL
+│   ├── migrations/              # dbmate のマイグレーション（タイムスタンプ版）
 │   └── seed.sql
-├── docs/                        # ADR
+├── docs/v0.1/                   # 仕様書・設計文書
 └── .github/workflows/
 ```
 
@@ -79,7 +80,55 @@ Lambda は1関数にまとめる。HTTP API の `$default` ルートから Mangu
   - `weekday/` — 曜日と時刻の整形。
 - **components/board/**, **detail/** は表示と操作のみ。判断ロジックは features に置く。
 - **components/ui/** は shadcn/ui の生成物。手で直さず、必要ならラッパを作る。
-- ソートは API の ORDER BY ではなくクライアント側で行う。ポーリング結果と同じ関数で並べ替えたほうが同期時の整合が取りやすいため（30件規模なので性能上の問題はない）。
+- ソートはクライアント側で行う。ポーリング結果と同じ関数で並べ替えたほうが同期時の整合が取りやすい（30件規模なので性能上の問題はない）。
+
+---
+
+## データベースの規約
+
+### 主キーと識別子
+
+- **外部サービスが発行する識別子を主キーにしない。** 主キーは内部採番の `uuid`（`gen_random_uuid()`）とする。
+- Auth0 の `sub` は `app_user.sub` に unique 列として持つ。アカウントリンクや認証基盤の変更で `sub` が変わっても、1行1列の更新で復旧できる。
+- 他テーブルからユーザーを参照するときは `app_user.id` を指す。
+
+### 時刻
+
+- 発生時刻を記録する列は `timestamptz`（= `timestamp with time zone`）。UTC の一瞬として保存される。
+- ドメイン固有の時刻表現は整数で持つ。`air_time_min` は 0〜1799 の分で、24:00〜29:59 を許容する。時刻型では表現できない。
+
+### updated_at
+
+`set_updated_at()` トリガー関数を全テーブルで共有する。`before update` で接続すれば、アプリが書き忘れても更新される。
+
+```sql
+create trigger <テーブル名>_set_updated_at
+  before update on <テーブル名>
+  for each row
+  execute function set_updated_at();
+```
+
+`season.updated_at` は配下の `anime` やタグ紐付けの変更でも更新する必要がある。これは自分の行しか触らない `set_updated_at()` では実現できないため、親を更新する別のトリガー関数を用意する。
+
+### 制約
+
+- 起きてはいけない重複には unique 制約を付ける。「たぶん起きない」ではなく「起きたら不具合」なら、DB で拒否させて表面化させる。
+- 外部から提供される任意項目（OIDC の `name` / `picture` など）は nullable にする。欠落時に `not null` 違反でログインが落ちるのを避ける。表示側でフォールバックを用意する。
+
+---
+
+## マイグレーション
+
+dbmate で管理する。マイグレーションの中身は素の SQL。
+
+- ファイルは `npx dbmate new <名前>` で生成する。ファイル名はタイムスタンプ版で、適用順は名前順。
+- `-- migrate:up` と `-- migrate:down` のマーカー行が必須。
+- 適用済みは DB 内の `schema_migrations` テーブルで管理される。同じものが二度当たらない。
+- **一度でも staging や prod に適用したマイグレーションは編集しない。** 変更が必要なら新しいマイグレーションを追加する。
+- 適用は明示的な操作に限る。CI/CD で自動実行しない。スキーマ変更はロールバックが難しく、配信中に壊れると復旧できない。
+- `seed.sql` には検証用の異常系を意図的に含める（週跨ぎデータ、到達不能な画像URL）。
+
+スキーマダンプ（`dbmate dump`）は `DBMATE_NO_DUMP_SCHEMA=true` で無効化している。この機能はホスト側の `pg_dump` を呼ぶため、サーバと同じ 18 系のクライアントが必要になる。
 
 ---
 
@@ -100,9 +149,9 @@ Auth0 のローカルエミュレータは存在しないため、ローカル�
 
 本番は Neon の Pooler（ホスト名に `-pooler` が付くエンドポイント）経由。中身は PgBouncer の transaction mode なので prepared statement を無効化する必要がある。ローカルは Postgres 直結なので prepared statement が有効でも動いてしまい、**ローカルで通って本番で落ちる**。これを避けるため、無効化設定（`statement_cache_size=0` 相当）はローカルでも同じく適用する。**環境で分岐させない。**
 
-Neon の直結エンドポイントは Lambda から使わない。接続枯渇を起こす。ただしマイグレーション（DDL）は Pooler ではなく直結から流す。
+Neon の直結エンドポイントは Lambda から使わない。接続枯渇を起こす。マイグレーション（DDL）は Pooler ではなく直結から流す。
 
-Neon は `sslmode=require` が必須。ローカルの Postgres は非SSLなので、ここは環境差として残る（接続文字列で吸収する）。
+SSL の要否は環境で異なる。Neon は `sslmode=require`、ローカルの Postgres は非SSLのため `sslmode=disable`。接続文字列で吸収する。
 
 ### ローカルスタックの方針
 
@@ -118,15 +167,6 @@ Neon は `sslmode=require` が必須。ローカルの Postgres は非SSLなの�
 
 ---
 
-## マイグレーション
-
-- Alembic は使わず、`db/migrations/` に連番の素のSQLを置く。Lambda に同梱すると本番への適用経路が曖昧になるため、アプリから独立させる。
-- 適用は明示的な操作に限る。CI/CD で自動実行しない。スキーマ変更はロールバックが難しく、配信中に壊れると復旧できない。
-- `season.updated_at` は配下の anime やタグ紐付けの変更でも更新する必要がある。アプリ側の書き忘れを構造的に防ぐため **DBトリガー**で実装する。
-- `seed.sql` には検証用の異常系を意図的に含める（週跨ぎデータ、到達不能な画像URL）。
-
----
-
 ## ブランチと環境
 
 | ブランチ | 環境 | フロント | API | DB |
@@ -136,7 +176,7 @@ Neon は `sslmode=require` が必須。ローカルの Postgres は非SSLなの�
 
 - Vercel は Production Branch を `main` に設定し、Root Directory を `apps/web` にする。
 - API は GitHub Actions が `apps/api/**` の変更を検知して `sam build && sam deploy`。AWS 認証情報はリポジトリに置かず、**GitHub OIDC で AssumeRole** する。
-- ワークフローは `paths:` フィルタで分ける（`web-ci` / `api-ci` / `api-deploy` / `db-migrate`）。monorepo でも無関係な CI を回さないため。
+- ワークフローは `paths:` フィルタで分ける（`web-ci` / `api-ci` / `api-deploy` / `db-migrate`）。無関係な CI を回さないため。
 
 staging と prod は Neon の別プロジェクトとして作成し、接続文字列を共有しない。
 
@@ -151,6 +191,7 @@ Neon はアイドル時に自動サスペンドし、アクセスが来ると1�
 - `stream_weekday`（配信曜日）と `air_weekday`（放送曜日）を、変数名・カラム名・UIラベルのすべてで区別する。日本語で「曜日」とだけ書かない。
 - 週跨ぎのソート比較を絶対曜日で行わない。仕様の式どおりに比較する。ここは必ずユニットテストで固定してから実装する。
 - 詳細モーダルの自動保存とポーリングは競合する。**フォーカス中のフィールドはポーリング結果で上書きしない。** この保護がないと配信中に入力が消える。
+- メールアドレスは小文字に正規化してから保存する。unique 制約は大文字小文字を区別するため、正規化しないと重複を取りこぼす。
 
 ---
 
@@ -159,4 +200,4 @@ Neon はアイドル時に自動サスペンドし、アクセスが来ると1�
 - 新機能・バグ修正はテストから書く（RED → GREEN → REFACTOR）。特に `features/` の純関数と `services/` の権限判定。
 - コミットは Conventional Commits（`feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`）。
 - 1ファイルは 200〜400行を目安、800行を上限とする。
-- 秘密情報はコミットしない。`.env.example` にはキー名だけを書き、値を入れない。
+- 秘密情報はコミットしない。`.env.example` にはキー名とローカル専用の値だけを書く。
