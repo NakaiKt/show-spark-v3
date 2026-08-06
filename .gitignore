@@ -21,3 +21,4 @@ samconfig.toml
 .DS_Store
 *.log
 **/env
+**/venv
