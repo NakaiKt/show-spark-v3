@@ -1,6 +1,11 @@
 import os
 from dataclasses import dataclass
 
+"""
+アプリケーションの設定
+
+環境変数を読み込み、環境地を保持するクラスを提供する
+"""
 @dataclass
 class Settings:
   app_env: str
