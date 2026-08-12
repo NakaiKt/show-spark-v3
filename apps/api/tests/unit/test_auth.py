@@ -6,14 +6,8 @@ from app.auth import (
     _verified_claims_from_authorizer,
     current_claims,
 )
-from app.core.config import Settings
 
-LOCAL_SETTINGS = Settings(
-    app_env="local", database_url="postgres://user:pass@host:5432/db"
-)
-PROD_SETTINGS = Settings(
-    app_env="prod", database_url="postgres://user:pass@host:5432/db"
-)
+from tests.const import LOCAL_SETTINGS, PROD_SETTINGS
 
 
 def _request(event: dict | None):

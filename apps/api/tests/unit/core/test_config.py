@@ -13,11 +13,16 @@ class TestConfig:
         try:
             # 環境変数の指定
             os.environ["APP_ENV"] = "test"
-            os.environ["DATABASE_URL"] = "sqlite:///test.db"
+            os.environ["DATABASE_URL"] = (
+                "postgres://showspark:showspark@127.0.0.1:5432/showspark?sslmode=disable"
+            )
             yield
         finally:
             os.environ.pop("APP_ENV", "test")
-            os.environ.pop("DATABASE_URL", "sqlite:///test.db")
+            os.environ.pop(
+                "DATABASE_URL",
+                "postgres://showspark:showspark@127.0.0.1:5432/showspark?sslmode=disable",
+            )
 
     class TestSettings:
         class TestIsLocal:
@@ -42,7 +47,7 @@ class TestConfig:
             settings = load_settings()
             assert isinstance(settings, Settings)
             assert settings.app_env == "test"
-            assert settings.database_url == "sqlite:///test.db"
+            assert settings.database_url == os.environ["DATABASE_URL"]
 
         def test_load_settings_raises_runtime_error_when_env_vars_missing(self):
             # 環境変数が未設定のときにRuntimeErrorを発生させること
