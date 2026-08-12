@@ -3,7 +3,9 @@ import os
 # app.core.config は import された瞬間に load_settings() を実行する。
 # app パッケージを import する前に環境変数を入れておく必要がある。
 os.environ["APP_ENV"] = "test"
-os.environ["DATABASE_URL"] = "sqlite:///test.db"
+os.environ["DATABASE_URL"] = (
+    "postgres://showspark:showspark@127.0.0.1:5432/showspark?sslmode=disable"
+)
 
 import base64
 import json
