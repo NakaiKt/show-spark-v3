@@ -3,54 +3,61 @@ from fastapi import Header, HTTPException, Request
 
 from app.core.config import settings
 
-"""
-localの場合
 
-jwtのclaumsを取得する
-"""
-def _jwt_claims_from_lambda(request: Request) -> dict | None:
-  event = request.scope.get("aws.event")
+def _verified_claims_from_authorizer(request: Request) -> dict | None:
+    """
+    API Gateway の JWT Authorizer が検証済みのクレームを取り出す
 
-  if not event:
-    return None
+    署名の検証は AWS 側で完了しているため、この値はそのまま信頼してよい。
+    Authorizer を経由していない場合は None を返す
+    """
+    event = request.scope.get("aws.event")
 
-  claims = (
-    event.get("requestContext", {})
-      .get("authorizer", {})
-      .get("jwt", {})
-      .get("claims")
-  )
-  return claims or None
+    if not event:
+        return None
 
-"""
-API Gatewayを通す場合
+    claims = (
+        event.get("requestContext", {})
+        .get("authorizer", {})
+        .get("jwt", {})
+        .get("claims")
+    )
+    return claims or None
 
-Bearerトークンからdecodeして認証取得
-"""
-def _claims_from_local(authorization: str | None) -> dict:
-  if not settings.is_local:
-    raise RuntimeError("ローカル用の認証経路はAPP_ENV=localでしか使えません")
-  
-  if not authorization or not authorization.startswith("Bearer "):
-    raise HTTPException(status_code=401, detail="Unauthorized")
 
-  token = authorization.removeprefix("Bearer ")
-  try:
-    return jwt.decode(token, options={"verify_signature": False})
-  except jwt.PyJWTError:
-    raise HTTPException(status_code = 401, detail = "Unauthorized")
+def _unverified_claims_from_header(authorization: str | None) -> dict:
+    """
+    Authorization ヘッダのトークンを署名検証せずにデコードする
 
-"""
-request, headerから認証情報を取得する
-"""
+    ローカルには検証を行う API Gateway が存在しないための代替経路。
+    誰でも偽造できるトークンを受け入れるため、APP_ENV=local 以外では例外を投げる
+    """
+    if not settings.is_local:
+        raise RuntimeError("未検証の認証経路はAPP_ENV=localでしか使えません")
+
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    token = authorization.removeprefix("Bearer ")
+    try:
+        return jwt.decode(token, options={"verify_signature": False})
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
 async def current_claims(
-  request: Request,
-  authorization: str | None = Header(default = None),
+    request: Request,
+    authorization: str | None = Header(default=None),
 ) -> dict:
-  claims = _jwt_claims_from_lambda(request)
+    """
+    リクエストから認証情報を取り出す
 
-  if claims:
-    return claims
+    Authorizer の検証済みクレームを優先し、取れない場合のみヘッダを見る。
+    順序を入れ替えると、本番で偽造トークンを受け入れる経路ができる
+    """
+    claims = _verified_claims_from_authorizer(request)
 
-  return _claims_from_local(authorization)
-  
+    if claims:
+        return claims
+
+    return _unverified_claims_from_header(authorization)
