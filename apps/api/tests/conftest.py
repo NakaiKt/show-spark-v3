@@ -12,6 +12,8 @@ import json
 
 import pytest
 
+from app.db import close_pool
+
 
 def _b64url(data: dict) -> str:
     return base64.urlsafe_b64encode(json.dumps(data).encode()).rstrip(b"=").decode()
@@ -32,3 +34,9 @@ def make_token():
         return f"{header}.{payload}."
 
     return _make
+
+
+@pytest.fixture(scope="session", autouse=True)
+async def close_pool():
+    yield
+    await close_pool()
