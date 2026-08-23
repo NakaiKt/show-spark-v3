@@ -12,7 +12,7 @@ import json
 
 import pytest
 
-from app.db import close_pool
+from app import db
 
 
 def _b64url(data: dict) -> str:
@@ -39,4 +39,4 @@ def make_token():
 @pytest.fixture(scope="session", autouse=True)
 async def close_pool():
     yield
-    await close_pool()
+    await db.close_pool()
