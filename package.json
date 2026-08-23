@@ -12,7 +12,11 @@
     "db:status": "dbmate status",
     "db:seed": "docker compose exec -T db psql -U showspark -d showspark -v ON_ERROR_STOP=1 < db/seed.sql",
     "db:reset": "dbmate drop && dbmate up && npm run db:seed",
-    "local:api": "cd apps/api && venv/bin/uvicorn app.main:app --reload --app-dir src --port 8000 --env-file env/.env.local"
+    "local:api": "cd apps/api && venv/bin/uvicorn app.main:app --reload --app-dir src --port 8000 --env-file env/.env.local",
+    "test:api": "cd apps/api && venv/bin/python -m pytest",
+    "test:api:unit": "cd apps/api && venv/bin/python -m pytest tests/unit",
+    "test:api:integration": "cd apps/api && venv/bin/python -m pytest tests/integration",
+    "test:api:cov": "cd apps/api && venv/bin/python -m pytest --cov=src --cov-report=term-missing"
   },
   "devDependencies": {
     "dbmate": "^2.34.1"
