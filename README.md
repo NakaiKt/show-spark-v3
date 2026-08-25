@@ -13,22 +13,22 @@
 
 ## 前提
 
-| ツール | バージョン | 必要な対象 |
-|---|---|---|
-| Docker | — | DB |
-| Node.js | 22+ | DB |
-| Python | 3.14 | API |
+| ツール  | バージョン | 必要な対象 |
+| ------- | ---------- | ---------- |
+| Docker  | —          | DB         |
+| Node.js | 22+        | DB         |
+| Python  | 3.14       | API        |
 
 WSL2 で Docker Desktop を使う場合は、Settings → Resources → WSL Integration で対象ディストロを有効にする。
 
 ## 依存関係
 
-| やること | 必要なもの |
-|---|---|
-| マイグレーション、データ操作 | DB |
-| API のユニットテスト | Python 環境 |
-| API の統合テスト | DB ＋ Python 環境 |
-| API の起動 | DB ＋ Python 環境 |
+| やること                     | 必要なもの        |
+| ---------------------------- | ----------------- |
+| マイグレーション、データ操作 | DB                |
+| API のユニットテスト         | Python 環境       |
+| API の統合テスト             | DB ＋ Python 環境 |
+| API の起動                   | DB ＋ Python 環境 |
 
 ---
 
@@ -52,28 +52,28 @@ npm run db:migrate
 
 ## コマンド
 
-| コマンド | 内容 |
-|---|---|
-| `npm run local:db` | コンテナを起動し、接続可能になるまで待つ |
-| `npm run local:db:stop` | 停止する。データは残る |
-| `npm run local:db:destroy` | コンテナとボリュームを削除する。**データが消える** |
-| `npm run db:migrate` | 未適用のマイグレーションを適用する |
-| `npm run db:status` | 適用状況を一覧表示する（`[X]` 適用済み / `[ ]` 未適用） |
-| `npm run db:rollback` | 直前のマイグレーションを1つ戻す |
-| `npm run db:seed` | `db/seed.sql` を流し込む |
-| `npm run db:reset` | DB を作り直し、全マイグレーションとシードを適用する |
-| `npm run db:psql` | psql を開く |
+| コマンド                   | 内容                                                    |
+| -------------------------- | ------------------------------------------------------- |
+| `npm run local:db`         | コンテナを起動し、接続可能になるまで待つ                |
+| `npm run local:db:stop`    | 停止する。データは残る                                  |
+| `npm run local:db:destroy` | コンテナとボリュームを削除する。**データが消える**      |
+| `npm run db:migrate`       | 未適用のマイグレーションを適用する                      |
+| `npm run db:status`        | 適用状況を一覧表示する（`[X]` 適用済み / `[ ]` 未適用） |
+| `npm run db:rollback`      | 直前のマイグレーションを1つ戻す                         |
+| `npm run db:seed`          | `db/seed.sql` を流し込む                                |
+| `npm run db:reset`         | DB を作り直し、全マイグレーションとシードを適用する     |
+| `npm run db:psql`          | psql を開く                                             |
 
 `db:migrate` は何度実行しても安全。適用済みかどうかは `schema_migrations` テーブルで管理される。
 
 ## psql
 
-| 入力 | 内容 |
-|---|---|
-| `\dt` | テーブル一覧 |
+| 入力            | 内容                     |
+| --------------- | ------------------------ |
+| `\dt`           | テーブル一覧             |
 | `\d テーブル名` | 列・制約・トリガーの定義 |
-| `\l` | データベース一覧 |
-| `\q` | 終了 |
+| `\l`            | データベース一覧         |
+| `\q`            | 終了                     |
 
 ## マイグレーションを追加する
 
@@ -105,10 +105,10 @@ staging や prod に適用済みのマイグレーションは編集しない。
 
 `.env`（リポジトリ直下）。dbmate が読み込む。コミットしない。
 
-| 変数 | 値 |
-|---|---|
-| `DATABASE_URL` | `postgres://showspark:showspark@127.0.0.1:5432/showspark?sslmode=disable` |
-| `DBMATE_NO_DUMP_SCHEMA` | `true` |
+| 変数                    | 値                                                                        |
+| ----------------------- | ------------------------------------------------------------------------- |
+| `DATABASE_URL`          | `postgres://showspark:showspark@127.0.0.1:5432/showspark?sslmode=disable` |
+| `DBMATE_NO_DUMP_SCHEMA` | `true`                                                                    |
 
 ## 動作確認
 
@@ -148,12 +148,12 @@ http://127.0.0.1:8000 で待ち受ける。コード変更で自動リロード�
 
 ## テスト
 
-| コマンド | 内容 | DB |
-|---|---|---|
-| `npm run test:api:unit` | ユニットテストのみ | 不要 |
-| `npm run test:api:integration` | 統合テストのみ | 必要 |
-| `npm run test:api` | 全テスト | 必要 |
-| `npm run test:api:cov` | 全テストとカバレッジ | 必要 |
+| コマンド                       | 内容                 | DB   |
+| ------------------------------ | -------------------- | ---- |
+| `npm run test:api:unit`        | ユニットテストのみ   | 不要 |
+| `npm run test:api:integration` | 統合テストのみ       | 必要 |
+| `npm run test:api`             | 全テスト             | 必要 |
+| `npm run test:api:cov`         | 全テストとカバレッジ | 必要 |
 
 統合テストが作る行は `sub` が `google-oauth2|test-` で始まるものだけで、各テストの前後に削除される。
 
@@ -161,9 +161,9 @@ http://127.0.0.1:8000 で待ち受ける。コード変更で自動リロード�
 
 `apps/api/env/.env.local`。`npm run local:api` が読み込む。雛形は `apps/api/.env.example`。コミットしない。
 
-| 変数 | 値 |
-|---|---|
-| `APP_ENV` | `local` |
+| 変数           | 値                                                                        |
+| -------------- | ------------------------------------------------------------------------- |
+| `APP_ENV`      | `local`                                                                   |
 | `DATABASE_URL` | `postgres://showspark:showspark@127.0.0.1:5432/showspark?sslmode=disable` |
 
 `APP_ENV=local` のときだけ、署名検証なしの認証経路が有効になる。
@@ -197,11 +197,30 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8000/me
 ```
 
 ```json
-{"id":"...","sub":"google-oauth2|me","email":"me@example.com","name":"Me","picture":null,
- "created_at":"2026-01-01T00:00:00+00:00","updated_at":"...","last_login_at":"..."}
+{
+  "id": "...",
+  "sub": "google-oauth2|me",
+  "email": "me@example.com",
+  "name": "Me",
+  "picture": null,
+  "created_at": "2026-01-01T00:00:00+00:00",
+  "updated_at": "...",
+  "last_login_at": "..."
+}
 ```
 
 初回は `app_user` に行が作られ、2回目以降は `last_login_at` が更新される。
+
+---
+
+# Frontend
+
+## localhost起動
+
+```
+cd apps/web
+
+```
 
 ---
 
@@ -209,23 +228,23 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8000/me
 
 ## DB
 
-| 症状 | 対処 |
-|---|---|
-| `docker: command not found` | Docker Desktop の WSL Integration を有効化し、WSL を再起動する |
-| `connection refused` | `npm run local:db` |
-| `SSL is not enabled on the server` | `.env` の `DATABASE_URL` に `?sslmode=disable` を付ける |
-| `password authentication failed` | `.env` と `docker-compose.yml` のユーザー名・パスワードを一致させる |
-| `port is already allocated` | `docker-compose.yml` の `ports` を `127.0.0.1:55432:5432` に変え、`.env` のポートも合わせる |
-| `file must contain '-- migrate:up' comment` | マイグレーションにマーカー行を追加する |
-| `pg_dump: command not found` | `.env` に `DBMATE_NO_DUMP_SCHEMA=true` を追加する |
-| コンテナが `unhealthy` | `docker compose logs db` を確認。`npm run local:db:destroy` して再作成 |
+| 症状                                        | 対処                                                                                        |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `docker: command not found`                 | Docker Desktop の WSL Integration を有効化し、WSL を再起動する                              |
+| `connection refused`                        | `npm run local:db`                                                                          |
+| `SSL is not enabled on the server`          | `.env` の `DATABASE_URL` に `?sslmode=disable` を付ける                                     |
+| `password authentication failed`            | `.env` と `docker-compose.yml` のユーザー名・パスワードを一致させる                         |
+| `port is already allocated`                 | `docker-compose.yml` の `ports` を `127.0.0.1:55432:5432` に変え、`.env` のポートも合わせる |
+| `file must contain '-- migrate:up' comment` | マイグレーションにマーカー行を追加する                                                      |
+| `pg_dump: command not found`                | `.env` に `DBMATE_NO_DUMP_SCHEMA=true` を追加する                                           |
+| コンテナが `unhealthy`                      | `docker compose logs db` を確認。`npm run local:db:destroy` して再作成                      |
 
 ## API
 
-| 症状 | 対処 |
-|---|---|
-| `venv/bin/python: No such file or directory` | API の初回セットアップを実行する |
-| テストが「DBに接続できません」で止まる | `npm run local:db` |
-| `relation "app_user" does not exist` | `npm run db:migrate` |
-| `/health` が 503 を返す | `npm run local:db` |
+| 症状                                                            | 対処                                                     |
+| --------------------------------------------------------------- | -------------------------------------------------------- |
+| `venv/bin/python: No such file or directory`                    | API の初回セットアップを実行する                         |
+| テストが「DBに接続できません」で止まる                          | `npm run local:db`                                       |
+| `relation "app_user" does not exist`                            | `npm run db:migrate`                                     |
+| `/health` が 503 を返す                                         | `npm run local:db`                                       |
 | `RuntimeError: 未検証の認証経路はAPP_ENV=localでしか使えません` | `apps/api/env/.env.local` の `APP_ENV` を `local` にする |
