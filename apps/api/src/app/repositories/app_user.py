@@ -1,3 +1,15 @@
+async def get_by_sub(conn, sub: str):
+    """
+    subからユーザー情報を取得する
+    """
+    SELECT = """
+    select id, sub, email, name, picture, created_at, updated_at, last_login_at
+    from app_user
+    where sub = $1
+    """
+    return await conn.fetchrow(SELECT, sub)
+
+
 async def upsert(conn, sub: str, email: str, name: str | None, picture: str | None):
     """
     ユーザー情報をupsertする

@@ -6,6 +6,11 @@ from app.services import user
 router = APIRouter()
 
 
+@router.get("/me")
+async def get_me(claims: dict = Depends(current_claims)):
+    return await user.get_user(claims)
+
+
 @router.put("/me")
-async def me(claims: dict = Depends(current_claims)):
+async def update_me(claims: dict = Depends(current_claims)):
     return await user.sync_from_claims(claims)
