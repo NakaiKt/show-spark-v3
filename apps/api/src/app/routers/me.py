@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 
 from app.auth import current_claims
 from app.schemas.error import ErrorResponse
-from app.schemas.user import MeGetResponse, MeUpdateRequest
+from app.schemas.user import MeGetResponse, MeUpdateResponse
 from app.services import user
 
 router = APIRouter()
@@ -24,7 +24,7 @@ async def get_me(claims: dict = Depends(current_claims)):
 
 @router.put(
     "/me",
-    response_model=MeGetResponse,
+    response_model=MeUpdateResponse,
     responses={
         **ERROR_401,
         409: {

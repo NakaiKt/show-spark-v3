@@ -15,5 +15,5 @@ class MeGetResponse(BaseModel):
     last_login_at: datetime
 
 
-class MeUpdateRequest(MeGetResponse):
+class MeUpdateResponse(MeGetResponse):
     pass
