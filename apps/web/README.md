@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Web
 
-## Getting Started
+show-spark のフロントエンド（Next.js + `@auth0/nextjs-auth0` v4）。
 
-First, run the development server:
+- プロジェクト全体の起動 → [README.md](../../README.md)
+- 構成・開発ルール → [AGENT.md](../../AGENT.md)
+
+コマンドはすべて `apps/web` で実行する。
+
+## 初回セットアップ
+
+```bash
+npm install
+mkdir -p env
+touch env/.env.local
+```
+
+`env/.env.local` に下記の環境変数を書く。
+
+## 環境変数
+
+`apps/web/env/.env.local` に書く。`npm run dev` が起動のたびに `apps/web/.env.local` へコピーするため、`apps/web/.env.local` を直接編集しても上書きされて消える。コミットしない。
+
+| 変数                  | 値                                                                  |
+| --------------------- | ------------------------------------------------------------------- |
+| `APP_BASE_URL`        | `http://localhost:3000`                                             |
+| `AUTH0_DOMAIN`        | Auth0 dev テナントのドメイン（例: `dev-xxxx.us.auth0.com`）          |
+| `AUTH0_CLIENT_ID`     | Auth0 の Application の Client ID                                   |
+| `AUTH0_CLIENT_SECRET` | Auth0 の Application の Client Secret                               |
+| `AUTH0_SECRET`        | セッション cookie の暗号鍵。`openssl rand -hex 32` の出力           |
+| `AUTH0_AUDIENCE`      | Auth0 の APIs に登録した API の Identifier。API を呼ぶ処理で必要になる |
+
+## Auth0 の Application 設定
+
+Auth0 の Application → Settings に登録する。完全一致で照合されるため、末尾のスラッシュも含めて揃える。
+
+| 項目                  | 値                                        |
+| --------------------- | ----------------------------------------- |
+| Allowed Callback URLs | `http://localhost:3000/api/auth/callback` |
+| Allowed Logout URLs   | `http://localhost:3000/auth/login`        |
+| Allowed Web Origins   | `http://localhost:3000`                   |
+
+SDK のルートは `src/lib/auth0.ts` の `routes` で `/api/auth/*` に設定している。パスを変えたら上の表も合わせる。
+
+## 起動
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+http://localhost:3000 で待ち受ける。コード変更で自動リロード。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+ログインの動作確認には DB と API も必要。まとめて起動する方法は [README.md](../../README.md) の「フロント＋DB＋API」を参照。
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## コマンド
 
-## Learn More
+| コマンド         | 内容                                           |
+| ---------------- | ---------------------------------------------- |
+| `npm run dev`    | `env/.env.local` をコピーして開発サーバーを起動 |
+| `npm run build`  | 本番ビルド                                     |
+| `npm run start`  | 本番ビルドを起動                               |
+| `npm run lint`   | Biome でリントとフォーマットを検査する         |
+| `npm run format` | Biome でフォーマットを適用する                 |
 
-To learn more about Next.js, take a look at the following resources:
+## つまずいたら
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| 症状                                    | 対処                                                                      |
+| --------------------------------------- | ------------------------------------------------------------------------- |
+| `.env.local` を編集したのに反映されない | `env/.env.local` を編集して `npm run dev` を再起動する                    |
+| Auth0 で `Callback URL mismatch`        | Allowed Callback URLs を `http://localhost:3000/api/auth/callback` にする |
+| ログアウト後に Auth0 のエラー画面が出る | Allowed Logout URLs に `http://localhost:3000/auth/login` を登録する      |
+| ログイン後 `/auth/error?reason=registration_closed` に飛ぶ | Auth0 の Post-Login Action で拒否されている。Action の `SIGNUP_ENABLED` を確認する |

@@ -1,0 +1,56 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "local",
+      "detail": "DB を起動してから API と Web を別パネルで起動する",
+      "dependsOrder": "sequence",
+      "dependsOn": ["local:db", "local:servers"],
+      "problemMatcher": []
+    },
+    {
+      "label": "local:servers",
+      "dependsOn": ["local:api", "local:web"],
+      "problemMatcher": []
+    },
+    {
+      "label": "local:db",
+      "type": "npm",
+      "script": "local:db",
+      "problemMatcher": [],
+      "presentation": { "panel": "shared", "reveal": "silent" }
+    },
+    {
+      "label": "local:api",
+      "type": "npm",
+      "script": "local:api",
+      "isBackground": true,
+      "presentation": { "panel": "dedicated", "group": "local" },
+      "problemMatcher": {
+        "owner": "local-api",
+        "pattern": { "regexp": "^__never_matches__$" },
+        "background": {
+          "activesBeforeStarting": true,
+          "beginsPattern": "Will watch for changes",
+          "endsPattern": "Application startup complete"
+        }
+      }
+    },
+    {
+      "label": "local:web",
+      "type": "npm",
+      "script": "local:web",
+      "isBackground": true,
+      "presentation": { "panel": "dedicated", "group": "local" },
+      "problemMatcher": {
+        "owner": "local-web",
+        "pattern": { "regexp": "^__never_matches__$" },
+        "background": {
+          "activesBeforeStarting": true,
+          "beginsPattern": "next dev",
+          "endsPattern": "Ready in"
+        }
+      }
+    }
+  ]
+}

@@ -6,8 +6,8 @@
 - 構成・開発ルール → [AGENT.md](./AGENT.md)
 - 構築の進め方 → [土台の構築](./docs/v0.1/土台の構築.md)
 
-> **現在のステータス: DB と API の骨組みまで構築済み**
-> ローカルの Postgres、マイグレーション、`/health` と `/me` の2エンドポイントが動作する。フロントは未実装。
+> **現在のステータス: DB・API・フロントの骨組みまで構築済み**
+> ローカルの Postgres、マイグレーション、`/health` と `/me` の2エンドポイント、フロントの Google ログイン・ログアウトが動作する。フロントから `/me` を呼ぶ処理は未実装。
 
 ---
 
@@ -16,7 +16,7 @@
 | ツール  | バージョン | 必要な対象 |
 | ------- | ---------- | ---------- |
 | Docker  | —          | DB         |
-| Node.js | 22+        | DB         |
+| Node.js | 22+        | DB、Web    |
 | Python  | 3.14       | API        |
 
 WSL2 で Docker Desktop を使う場合は、Settings → Resources → WSL Integration で対象ディストロを有効にする。
@@ -29,6 +29,8 @@ WSL2 で Docker Desktop を使う場合は、Settings → Resources → WSL Inte
 | API のユニットテスト         | Python 環境       |
 | API の統合テスト             | DB ＋ Python 環境 |
 | API の起動                   | DB ＋ Python 環境 |
+| Web の起動                   | Web の依存関係    |
+| ログインの動作確認           | DB ＋ API ＋ Web  |
 
 ---
 
@@ -215,12 +217,67 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8000/me
 
 # Frontend
 
-## localhost起動
+セットアップ・環境変数・単体での起動は [apps/web/README.md](./apps/web/README.md) を参照。
 
-```
-cd apps/web
+---
 
+# フロント＋DB＋API
+
+DB・API・Web の初回セットアップを済ませてから使う。
+
+| URL                        | 内容 |
+| -------------------------- | ---- |
+| http://localhost:3000      | Web  |
+| http://127.0.0.1:8000      | API  |
+| http://127.0.0.1:8000/docs | API ドキュメント |
+
+## 起動（VS Code）
+
+コマンドパレット → `Tasks: Run Task` → `local` を選ぶ。
+
+DB を起動して接続可能になるまで待ち、API と Web をそれぞれ別のターミナルパネルで起動する。パネルごとにログを追え、片方だけ止めて再起動できる。
+
+| タスク      | 内容                         |
+| ----------- | ---------------------------- |
+| `local`     | DB → API と Web を並列で起動 |
+| `local:db`  | DB のみ起動                  |
+| `local:api` | API のみ起動                 |
+| `local:web` | Web のみ起動                 |
+
+## 起動（1つのターミナル）
+
+```bash
+npm run local
 ```
+
+DB を起動してから、API と Web を1つのターミナルで並列に起動する。各行の先頭に `[api]` / `[web]` が付く。Ctrl+C で API と Web が両方止まる。片方が異常終了したときも、もう片方が止まる。
+
+DB コンテナは止まらない。止めるときは `npm run local:db:stop` を実行する。
+
+## 起動（ターミナルを分ける）
+
+ターミナルを3つ使い、それぞれで実行する。
+
+```bash
+npm run local:db
+```
+
+```bash
+npm run local:api
+```
+
+```bash
+npm run local:web
+```
+
+## コマンド
+
+| コマンド            | 内容                                              |
+| ------------------- | ------------------------------------------------- |
+| `npm run local`     | DB を起動してから、API と Web を並列で起動する     |
+| `npm run local:db`  | DB コンテナを起動し、接続可能になるまで待つ        |
+| `npm run local:api` | API を http://127.0.0.1:8000 で起動する            |
+| `npm run local:web` | Web を http://localhost:3000 で起動する            |
 
 ---
 

@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "local:db": "docker compose up -d --wait db",
+    "local": "npm run local:db && concurrently --kill-others --names api,web --prefix-colors blue,magenta \"npm:local:api\" \"npm:local:web\"",
+    "local:web": "npm --prefix apps/web run dev",
+    "local:db":"docker compose up -d --wait db",
     "local:db:stop": "docker compose stop db",
     "local:db:destroy": "docker compose down -v",
     "db:psql": "docker compose exec db psql -U showspark -d showspark",
@@ -19,6 +21,7 @@
     "test:api:cov": "cd apps/api && venv/bin/python -m pytest --cov=src --cov-report=term-missing"
   },
   "devDependencies": {
+    "concurrently": "^10.0.5",
     "dbmate": "^2.34.1"
   }
 }
