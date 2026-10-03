@@ -10,10 +10,12 @@ async def get_pool() -> asyncpg.Pool:
     接続先はsettings.database_urlで設定されているDB
 
     Returns:
-      asyncpg.Pool: 非同期に接続を管理するためのPool
+        asyncpg.Pool: 非同期に接続を管理するためのPool
 
     Raises:
-      RuntimeError: 接続が失敗した場合
+        OSError: DB に到達できない（接続拒否、名前解決の失敗など）
+        asyncpg.PostgresError: DB が接続を拒否した（認証失敗、DB が存在しないなど）
+        TimeoutError: 接続がタイムアウトした
     """
     global _pool
     if _pool is None:
