@@ -6,6 +6,12 @@ from app.repositories import app_user
 
 
 async def sync_from_claims(claims: dict) -> dict:
+    """
+    Claimsからユーザー情報を同期する
+    subが存在しない場合は新規作成、存在する場合は更新する
+
+    claimsのユーザー情報を登録、同期したいときに使用する
+    """
     sub = claims.get("sub")
     email = claims.get("email")
     if not sub or not email:
