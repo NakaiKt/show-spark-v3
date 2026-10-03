@@ -6,6 +6,6 @@ from app.services import user
 router = APIRouter()
 
 
-@router.get("/me")
+@router.put("/me")
 async def me(claims: dict = Depends(current_claims)):
     return await user.sync_from_claims(claims)
