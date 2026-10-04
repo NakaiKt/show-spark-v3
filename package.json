@@ -5,7 +5,7 @@
   "scripts": {
     "local": "npm run local:db && concurrently --kill-others --names api,web --prefix-colors blue,magenta \"npm:local:api\" \"npm:local:web\"",
     "local:web": "npm --prefix apps/web run dev",
-    "local:db":"docker compose up -d --wait db",
+    "local:db": "docker compose up -d --wait db",
     "local:db:stop": "docker compose stop db",
     "local:db:destroy": "docker compose down -v",
     "db:psql": "docker compose exec db psql -U showspark -d showspark",
@@ -18,10 +18,12 @@
     "test:api": "cd apps/api && venv/bin/python -m pytest",
     "test:api:unit": "cd apps/api && venv/bin/python -m pytest tests/unit",
     "test:api:integration": "cd apps/api && venv/bin/python -m pytest tests/integration",
-    "test:api:cov": "cd apps/api && venv/bin/python -m pytest --cov=src --cov-report=term-missing"
+    "test:api:cov": "cd apps/api && venv/bin/python -m pytest --cov=src --cov-report=term-missing",
+    "gen:api-types": "mkdir -p packages/api-types && cd apps/api && PYTHONPATH=src APP_ENV=local DATABASE_URL=postgres://unused venv/bin/python scripts/export_openapi.py > ../../packages/api-types/openapi.json && cd ../.. && openapi-typescript packages/api-types/openapi.json -o packages/api-types/schema.d.ts"
   },
   "devDependencies": {
     "concurrently": "^10.0.5",
-    "dbmate": "^2.34.1"
+    "dbmate": "^2.34.1",
+    "openapi-typescript": "^7.13.0"
   }
 }
