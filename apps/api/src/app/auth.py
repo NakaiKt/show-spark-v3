@@ -8,6 +8,11 @@ from typing import Annotated
 
 _bearer = HTTPBearer(auto_error=False)
 
+CLAIM_NAMESPACE = "https://show-spark/"
+CLAIM_EMAIL = f"{CLAIM_NAMESPACE}email"
+CLAIM_NAME = f"{CLAIM_NAMESPACE}name"
+CLAIM_PICTURE = f"{CLAIM_NAMESPACE}picture"
+
 
 def _verified_claims_from_authorizer(request: Request) -> dict | None:
     """

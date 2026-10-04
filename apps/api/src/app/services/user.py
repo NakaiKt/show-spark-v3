@@ -3,6 +3,7 @@ from fastapi import HTTPException
 
 from app.db import get_pool
 from app.repositories import app_user
+from app.auth import CLAIM_EMAIL, CLAIM_NAME, CLAIM_PICTURE
 
 
 async def get_user(claims: dict) -> dict | None:
@@ -30,7 +31,7 @@ async def sync_from_claims(claims: dict) -> dict:
     claimsのユーザー情報を登録、同期したいときに使用する
     """
     sub = claims.get("sub")
-    email = claims.get("email")
+    email = claims.get(CLAIM_EMAIL)
     if not sub or not email:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
@@ -41,8 +42,8 @@ async def sync_from_claims(claims: dict) -> dict:
                 conn,
                 sub=sub,
                 email=email.lower(),
-                name=claims.get("name"),
-                picture=claims.get("picture"),
+                name=claims.get(CLAIM_NAME),
+                picture=claims.get(CLAIM_PICTURE),
             )
         except asyncpg.UniqueViolationError:
             raise HTTPException(

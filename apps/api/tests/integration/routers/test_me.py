@@ -1,8 +1,7 @@
-from datetime import datetime
-
 import pytest
 
 from app import db
+from app.auth import CLAIM_EMAIL, CLAIM_NAME, CLAIM_PICTURE
 from tests.integration.conftest import TEST_SUB_PREFIX
 
 pytestmark = pytest.mark.integration
@@ -14,9 +13,28 @@ NAME = "Alice"
 PICTURE = "alice.png"
 
 
-def _auth(make_token, **claims) -> dict:
-    # ヘッダーにAuthorizationを付与する
-    return {"Authorization": f"Bearer {make_token(**claims)}"}
+def _auth(
+    make_token,
+    *,
+    sub: str | None = None,
+    email: str | None = None,
+    name: str | None = None,
+    picture: str | None = None,
+) -> dict:
+    """
+    Auth0 が発行するアクセストークンと同じクレーム名で Authorization ヘッダを作る
+
+    渡さなかった項目はトークンに含めない。「欠けている」状態をテストするため、
+    None を値として入れるのではなく、キーごと外す
+    """
+    claims = {
+        "sub": sub,
+        CLAIM_EMAIL: email,
+        CLAIM_NAME: name,
+        CLAIM_PICTURE: picture,
+    }
+    token = make_token(**{k: v for k, v in claims.items() if v is not None})
+    return {"Authorization": f"Bearer {token}"}
 
 
 async def _fetch_user(sub: str):
