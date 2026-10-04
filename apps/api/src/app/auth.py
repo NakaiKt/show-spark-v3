@@ -1,7 +1,12 @@
 import jwt
-from fastapi import Header, HTTPException, Request
+from fastapi import Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import settings
+
+from typing import Annotated
+
+_bearer = HTTPBearer(auto_error=False)
 
 
 def _verified_claims_from_authorizer(request: Request) -> dict | None:
@@ -25,7 +30,7 @@ def _verified_claims_from_authorizer(request: Request) -> dict | None:
     return claims or None
 
 
-def _unverified_claims_from_header(authorization: str | None) -> dict:
+def _unverified_claims_from_token(token: str | None) -> dict:
     """
     Authorization ヘッダのトークンを署名検証せずにデコードする
 
@@ -35,10 +40,9 @@ def _unverified_claims_from_header(authorization: str | None) -> dict:
     if not settings.is_local:
         raise RuntimeError("未検証の認証経路はAPP_ENV=localでしか使えません")
 
-    if not authorization or not authorization.startswith("Bearer "):
+    if not token:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    token = authorization.removeprefix("Bearer ")
     try:
         return jwt.decode(token, options={"verify_signature": False})
     except jwt.PyJWTError:
@@ -47,7 +51,7 @@ def _unverified_claims_from_header(authorization: str | None) -> dict:
 
 async def current_claims(
     request: Request,
-    authorization: str | None = Header(default=None),
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
 ) -> dict:
     """
     リクエストから認証情報を取り出す
@@ -60,4 +64,6 @@ async def current_claims(
     if claims:
         return claims
 
-    return _unverified_claims_from_header(authorization)
+    return _unverified_claims_from_token(
+        credentials.credentials if credentials else None
+    )

@@ -63,6 +63,24 @@ class TestMeAuth:
 
         assert res.status_code == 401
 
+    # HTTPBearer は auto_error=False のため、形式違いは例外ではなく None になる。
+    # その None が 403 や 500 ではなく 401 に繋がることをルート越しに確かめる
+    @pytest.mark.parametrize(
+        "authorization",
+        [
+            "",  # 空
+            "Basic abc",  # 別スキーム
+            "Bearer",  # 空白なし
+            "Bearer ",  # 中身なし
+        ],
+    )
+    async def test_Bearer形式でないヘッダは401(self, client, method, authorization):
+        res = await client.request(
+            method, "/me", headers={"Authorization": authorization}
+        )
+
+        assert res.status_code == 401
+
     @pytest.mark.parametrize(
         "claims",
         [

@@ -1,13 +1,23 @@
 import pytest
 from fastapi import HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
 
 from app.auth import (
-    _unverified_claims_from_header,
+    _unverified_claims_from_token,
     _verified_claims_from_authorizer,
     current_claims,
 )
 
 from tests.const import LOCAL_SETTINGS, PROD_SETTINGS
+
+
+def _bearer(token: str) -> HTTPAuthorizationCredentials:
+    """
+    HTTPBearer が Authorization: Bearer <token> を解析した結果
+
+    ヘッダの解析は HTTPBearer が担うため、単体テストでは解析済みの値を直接渡す
+    """
+    return HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
 
 def _request(event: dict | None):
@@ -66,7 +76,7 @@ class TestVerifiedClaimsFromAuthorizer:
         assert _verified_claims_from_authorizer(_request(event)) is None
 
 
-class TestUnverifiedClaimsFromHeader:
+class TestUnverifiedClaimsFromToken:
     @pytest.fixture(autouse=True)
     def local_env(self, monkeypatch):
         # 未検証の経路は APP_ENV=local でしか動かないため、既定を local にする
@@ -77,34 +87,23 @@ class TestUnverifiedClaimsFromHeader:
         # alg=none の手作りトークンが通るのは意図した挙動
         token = make_token(sub="google-oauth2|1", email="a@b.c", name="太郎")
 
-        claims = _unverified_claims_from_header(f"Bearer {token}")
+        claims = _unverified_claims_from_token(token)
 
         assert claims == {"sub": "google-oauth2|1", "email": "a@b.c", "name": "太郎"}
 
+    # ヘッダの形式（スキーム違い、Bearer の後が空など）は HTTPBearer が None にする。
+    # その確認はルートを通す統合テストで行う
     @pytest.mark.parametrize(
-        "header",
+        "token",
         [
-            None,  # ヘッダ無し
+            None,  # HTTPBearer がヘッダ無し・形式違いと判定した
             "",  # 空
-            "Basic abc",  # 別スキーム
-            "Bearer",  # 空白なし
-            "Bearer ",  # 中身なし
-            "Bearer not-a-jwt",  # JWT として壊れている
+            "not-a-jwt",  # JWT として壊れている
         ],
     )
-    def test_不正なヘッダは500ではなく401を返す(self, header):
+    def test_不正なトークンは500ではなく401を返す(self, token):
         with pytest.raises(HTTPException) as excinfo:
-            _unverified_claims_from_header(header)
-
-        assert excinfo.value.status_code == 401
-
-    def test_スキーム名が小文字のときは受け付けない(self, make_token):
-        # RFC 6750 ではスキーム名は大文字小文字を区別しないが、
-        # このAPIのクライアントは自前のフロントのみのため厳格に扱う
-        token = make_token(sub="google-oauth2|1", email="a@b.c")
-
-        with pytest.raises(HTTPException) as excinfo:
-            _unverified_claims_from_header(f"bearer {token}")
+            _unverified_claims_from_token(token)
 
         assert excinfo.value.status_code == 401
 
@@ -115,7 +114,7 @@ class TestUnverifiedClaimsFromHeader:
         token = make_token(sub="google-oauth2|1", email="a@b.c")
 
         with pytest.raises(RuntimeError):
-            _unverified_claims_from_header(f"Bearer {token}")
+            _unverified_claims_from_token(token)
 
 
 class TestCurrentClaims:
@@ -134,9 +133,7 @@ class TestCurrentClaims:
             )
             forged = make_token(sub="FORGED", email="attacker@example.com")
 
-            claims = await current_claims(
-                _request(event), authorization=f"Bearer {forged}"
-            )
+            claims = await current_claims(_request(event), credentials=_bearer(forged))
 
             assert claims["sub"] == "REAL"
 
@@ -148,9 +145,7 @@ class TestCurrentClaims:
             valid_looking = make_token(sub="google-oauth2|1", email="a@b.c")
 
             with pytest.raises(RuntimeError):
-                await current_claims(
-                    _request(None), authorization=f"Bearer {valid_looking}"
-                )
+                await current_claims(_request(None), credentials=_bearer(valid_looking))
 
         async def test_クレームが空なら認証を通さない(self, make_token):
             """
@@ -161,7 +156,7 @@ class TestCurrentClaims:
             forged = make_token(sub="FORGED", email="attacker@example.com")
 
             with pytest.raises(RuntimeError):
-                await current_claims(_request(event), authorization=f"Bearer {forged}")
+                await current_claims(_request(event), credentials=_bearer(forged))
 
     class TestLocal:
         @pytest.fixture(autouse=True)
@@ -171,14 +166,12 @@ class TestCurrentClaims:
         async def test_APIGatewayが無い環境ではヘッダから読む(self, make_token):
             token = make_token(sub="google-oauth2|1", email="a@b.c")
 
-            claims = await current_claims(
-                _request(None), authorization=f"Bearer {token}"
-            )
+            claims = await current_claims(_request(None), credentials=_bearer(token))
 
             assert claims["sub"] == "google-oauth2|1"
 
         async def test_トークンが無ければ401(self):
             with pytest.raises(HTTPException) as excinfo:
-                await current_claims(_request(None), authorization=None)
+                await current_claims(_request(None), credentials=None)
 
             assert excinfo.value.status_code == 401
