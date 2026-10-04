@@ -3,8 +3,9 @@ from fastapi.responses import JSONResponse
 from mangum import Mangum
 
 from app.routers import health, me
+from app.schemas.error import ERROR_500
 
-app = FastAPI(title="show-spark API")
+app = FastAPI(title="show-spark API", responses=ERROR_500)
 app.include_router(health.router)
 app.include_router(me.router)
 

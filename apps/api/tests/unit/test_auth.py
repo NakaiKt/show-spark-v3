@@ -7,7 +7,6 @@ from app.auth import (
     _verified_claims_from_authorizer,
     current_claims,
 )
-
 from tests.const import LOCAL_SETTINGS, PROD_SETTINGS
 
 

@@ -1,9 +1,9 @@
 import asyncpg
 from fastapi import HTTPException
 
+from app.auth import CLAIM_EMAIL, CLAIM_NAME, CLAIM_PICTURE
 from app.db import get_pool
 from app.repositories import app_user
-from app.auth import CLAIM_EMAIL, CLAIM_NAME, CLAIM_PICTURE
 
 
 async def get_user(claims: dict) -> dict | None:

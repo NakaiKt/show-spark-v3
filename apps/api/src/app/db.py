@@ -1,4 +1,5 @@
 import asyncpg
+
 from app.core.config import settings
 
 _pool: asyncpg.Pool | None = None

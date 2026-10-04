@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends
 
 from app.auth import current_claims
@@ -6,6 +8,9 @@ from app.schemas.user import MeGetResponse, MeUpdateResponse
 from app.services import user
 
 router = APIRouter()
+
+# 認証済みのクレーム。Depends を引数の既定値に書かず、型として宣言する
+Claims = Annotated[dict, Depends(current_claims)]
 
 ERROR_401 = {401: {"model": ErrorResponse, "description": "トークン または sub が無い"}}
 
@@ -18,7 +23,7 @@ ERROR_401 = {401: {"model": ErrorResponse, "description": "トークン また�
         404: {"model": ErrorResponse, "description": "ユーザーが見つからない"},
     },
 )
-async def get_me(claims: dict = Depends(current_claims)):
+async def get_me(claims: Claims):
     return await user.get_user(claims)
 
 
@@ -33,5 +38,5 @@ async def get_me(claims: dict = Depends(current_claims)):
         },
     },
 )
-async def update_me(claims: dict = Depends(current_claims)):
+async def update_me(claims: Claims):
     return await user.sync_from_claims(claims)

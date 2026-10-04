@@ -1,10 +1,10 @@
+from typing import Annotated
+
 import jwt
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import settings
-
-from typing import Annotated
 
 _bearer = HTTPBearer(auto_error=False)
 

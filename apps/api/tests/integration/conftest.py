@@ -28,7 +28,7 @@ async def require_db():
         pool = await db.get_pool()
         async with pool.acquire() as conn:
             await conn.fetchval("select 1")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         pytest.exit(f"DBに接続できません。npm run local:db を実行してください: {e}")
 
 
